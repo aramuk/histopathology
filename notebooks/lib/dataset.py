@@ -4,10 +4,11 @@
 import os
 
 import numpy as np
-import pd
+import pandas as pd
 from skimage import io
 import torch
-from torch.utils.data.datasets import Dataset
+import torchvision
+from torch.utils.data import Dataset
 from torchvision import transforms
 
 
@@ -37,13 +38,13 @@ class PCam(Dataset):
 
     def __getitem__(self, idx):
         """Get the (image, label) at a given index in the PCam dataset."""
-        if torch.is_tensor():
+        if torch.is_tensor(idx):
             idx = idx.to_list()
         image_id = self.labels_df.iloc[idx, 0]
         image_path = os.path.join(self.image_dir, image_id + '.tif')
-        image = io.read(image_path)
+        image = io.imread(image_path)
         label = self.labels_df.iloc[idx, 1]
         label = np.array([label]).astype('int')
         if self.transform:
-            label = self.transform(label)
+            image = self.transform(image)
         return (image, label)

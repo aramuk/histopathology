@@ -1,3 +1,9 @@
+# Project proposal document
 cs184a_project_proposal.pdf
+# Downloaded dataset
 /data
-/__pycache__
+# Editor files
+.vscode
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
