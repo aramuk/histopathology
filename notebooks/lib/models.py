@@ -20,7 +20,7 @@ class Veggie16(nn.Module):
         """Creates a Veggie16 network.
 
         Args:
-            num_classes - The number of output classes to predict
+            num_classes: The number of output classes to predict.
         """
         super(Veggie16, self).__init__()
         # Load a pre-trained VGG-16 model and turn off autograd

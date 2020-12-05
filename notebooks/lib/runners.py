@@ -1,17 +1,18 @@
 # This module contains code used to train and evaluate a model 
 
 import time
+
 import torch
 
 def train(model, train_loader, device, criterion, optimizer, num_epochs=25):
 	"""Trains a given model.
 	
 	Args:
-		model - a PyTorch model.
-		train_loader - a DataLoader to the training data set.
-		criterion - loss function for the model.
-		optimizer - optimization algorithm to user while training.
-		num_epochs - the number of iterations to train.
+		model: a PyTorch model.
+		train_loader: a DataLoader to the training data set.
+		criterion: Loss function for the model.
+		optimizer: Optimization algorithm to be used.
+		num_epochs: The number of iterations of the optimizer.
 	"""
 	model.train()
 	since = time.time()
@@ -35,8 +36,8 @@ def evaluate(model, test_loader, device):
 	"""Evaluates a given model.
 	
 	Args:
-		model - a PyTorch model.
-		test_loader - a DataLoader to the evluation data set.
+		model: A PyTorch model.
+		test_loader: A DataLoader to the evluation data set.
 	"""
 	model.eval()
 	with torch.no_grad():
