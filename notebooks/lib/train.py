@@ -1,4 +1,4 @@
-# This module contains code used to train and evaluate a model 
+# This module contains code used to train a model.
 
 import time
 
@@ -13,47 +13,33 @@ def train(model, train_loader, device, criterion, optimizer, num_epochs=25):
 		criterion: Loss function for the model.
 		optimizer: Optimization algorithm to be used.
 		num_epochs: The number of iterations of the optimizer.
+
+	Return: torch.FloatTensor of loss over epochs.
 	"""
 	model.train()
 	since = time.time()
 	num_steps = len(train_loader)
+	losses = []
 	for epoch in range(1, num_epochs+1):
+		epoch_loss = 0.0
 		for i, (images, labels) in enumerate(train_loader, start=1):
 			images = images.to(device)
 			labels = labels.to(device)
-
+			# Generate prediciton and evaluate
 			outputs = model(images)
-			loss = criterion(outputs, labels)
-
+			loss = criterion(outputs, labels.flatten())
+			# Backpropagate loss and update weights
 			optimizer.zero_grad()
 			loss.backward()
 			optimizer.step()
-
-			if i % 10 == 0:
+			# Compute running average of epoch loss
+			epoch_loss = (epoch_loss * (i-1) + loss.item()) / i
+			# Print progress every 1000 batches
+			if i % 1000 == 0:
 				print(f'Epoch [{epoch}/{num_epochs}], Step [{i}/{num_steps}], Loss: {loss.item():.6f}')
+    # Print training time
+	time_elapsed = time.time() - since
+	print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+	return torch.FloatTensor(loss)
 
-def evaluate(model, test_loader, device):
-	"""Evaluates a given model.
 	
-	Args:
-		model: A PyTorch model.
-		test_loader: A DataLoader to the evluation data set.
-	"""
-	model.eval()
-	with torch.no_grad():
-		correct = 0
-		total = 0
-		for images, labels in test_loader:
-			images = images.to(device)
-			labels = labels.to(device)
-        
-			outputs = model(images)
-			predictions = torch.argmax(outputs, dim=1)
-
-			total += labels.size(0)
-			correct += (predictions == labels).sum().item()
-		print(f'Test Accuracy of Veggie16: {(100*(correct/total)):.6f}')
-
-def train_xval(model, train_loader, val_loader):
-	"""Train a model with cross validation."""
-	pass

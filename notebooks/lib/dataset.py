@@ -31,10 +31,11 @@ class PCam(Dataset):
         self.labels_df = pd.read_csv(csv_path)
         self.image_dir = image_dir
         self.transform = transform
+        self.num_samples = len(self.labels_df.index)
 
     def __len__(self):
         """Get the size of the PCam dataset."""
-        return len(self.labels_df)
+        return self.num_samples
 
     def __getitem__(self, idx):
         """Get the (image, label) at a given index in the PCam dataset."""
