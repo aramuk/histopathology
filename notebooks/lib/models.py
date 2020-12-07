@@ -41,7 +41,7 @@ class Veggie16(nn.Module):
             nn.Linear(in_features=2048, out_features=2048, bias=True),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.5, inplace=False),
-            nn.Linear(in_features=2048, out_features=num_classes, bias=True)
+            nn.Linear(in_features=2048, out_features=num_classes, bias=True),
         )
 
     def forward(self, x):
@@ -50,5 +50,5 @@ class Veggie16(nn.Module):
         out = self.avgpool(out)
         out = torch.flatten(out, 1)
         out = self.classifier(out)
-        return out
+        return nn.functional.softmax(out)
 

@@ -7,3 +7,7 @@ cs184a_project_proposal.pdf
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+# Library and key files
+kaggle.json
+lib.zip
+
