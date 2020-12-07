@@ -10,4 +10,5 @@ __pycache__/
 # Library and key files
 kaggle.json
 lib.zip
+notebooks/.ipynb_checkpoints/
 

@@ -35,13 +35,13 @@ class Veggie16(nn.Module):
         # Define a new block of fully-connected layers for the model.
         in_ftrs = architecture.classifier[0].in_features
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=in_ftrs, out_features=2048, bias=True),
+            nn.Linear(in_features=in_ftrs, out_features=1024, bias=True),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.5, inplace=False),
-            nn.Linear(in_features=2048, out_features=2048, bias=True),
+            nn.Linear(in_features=1024, out_features=1024, bias=True),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.5, inplace=False),
-            nn.Linear(in_features=2048, out_features=num_classes, bias=True),
+            nn.Linear(in_features=1024, out_features=num_classes, bias=True)
         )
 
     def forward(self, x):
@@ -50,5 +50,5 @@ class Veggie16(nn.Module):
         out = self.avgpool(out)
         out = torch.flatten(out, 1)
         out = self.classifier(out)
-        return nn.functional.softmax(out)
+        return out
 

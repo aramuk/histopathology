@@ -19,27 +19,26 @@ def train(model, train_loader, device, criterion, optimizer, num_epochs=25):
 	model.train()
 	since = time.time()
 	num_steps = len(train_loader)
-	losses = []
+	total_loss = 0
 	for epoch in range(1, num_epochs+1):
-		epoch_loss = 0.0
 		for i, (images, labels) in enumerate(train_loader, start=1):
 			images = images.to(device)
 			labels = labels.to(device)
-			# Generate prediciton and evaluate
+			# Generate prediction and evaluate
 			outputs = model(images)
-			loss = criterion(outputs, labels.flatten())
+			loss = criterion(outputs, labels.long().flatten())
 			# Backpropagate loss and update weights
 			optimizer.zero_grad()
 			loss.backward()
 			optimizer.step()
 			# Compute running average of epoch loss
-			epoch_loss = (epoch_loss * (i-1) + loss.item()) / i
+			total_loss += float(loss)
 			# Print progress every 1000 batches
 			if i % 1000 == 0:
 				print(f'Epoch [{epoch}/{num_epochs}], Step [{i}/{num_steps}], Loss: {loss.item():.6f}')
+		torch.save(model.state_dict('../models/checkpoint_model0.pth.tar'))
     # Print training time
 	time_elapsed = time.time() - since
 	print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
-	return torch.FloatTensor(loss)
-
+	return total_loss
 	
