@@ -1,6 +1,7 @@
-# This module contains the definitions for all convolutional
-# neural networks models used in this project.
-
+##############################################################
+# This module contains the definitions for all convolutional #
+# neural networks models used in this project.               #
+##############################################################
 
 import torch
 import torch.nn as nn
@@ -23,6 +24,7 @@ class Veggie16(nn.Module):
             num_classes: The number of output classes to predict.
         """
         super(Veggie16, self).__init__()
+        # Define the model's name for it's output files
         # Load a pre-trained VGG-16 model and turn off autograd
         # so its weights won't change.
         architecture = vgg16(pretrained=True)
@@ -51,4 +53,3 @@ class Veggie16(nn.Module):
         out = torch.flatten(out, 1)
         out = self.classifier(out)
         return out
-

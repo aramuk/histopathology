@@ -1,9 +1,12 @@
-# This module contains code used to evaluate a model. 
+#######################################################
+# This module contains code used to evaluate a model. # 
+#######################################################
 
 import time
 
 from sklearn.metrics import confusion_matrix
 import torch
+
 
 def evaluate(model, val_loader, device, criterion):
     """Evaluates a given model.
@@ -34,7 +37,7 @@ def evaluate(model, val_loader, device, criterion):
             y.extend(labels)
             y_hat.extend(predictions)
 
-			# Compute running average of loss
+            # Compute running average of loss
             net_loss = (net_loss * (i-1) + loss.item()) / i
             # Compute totals
             total += labels.size(0)

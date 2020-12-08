@@ -1,5 +1,7 @@
-# This module contains objects associated with the 
-# PCam dataset used in this project.
+####################################################
+# This module contains objects associated with the #
+# PCam dataset used in this project.               #
+####################################################
 
 import os
 

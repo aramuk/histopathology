@@ -1,4 +1,7 @@
-# This module contains transforms applied to images in this project.
+#################################################
+# Transforms applied to images in this project. #
+#################################################
+
 import numpy as np
 import cv2
 import torch
@@ -7,8 +10,6 @@ from PIL import Image
 
 class ToNormalized(object):
     """Perform channel-wise normalization on an RGB image
-
-
     """
     def __call__(self, pic):
         """
