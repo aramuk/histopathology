@@ -3,17 +3,19 @@
 ####################################################
 import os
 import time
+from typing import Tuple, List
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import PIL
-
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
-from torchvision.models import vgg16, alexnet
-import matplotlib.pyplot as plt
+import torchvision
+from torchvision import transforms
+from torchvision.models import vgg16
 
 
 class Album:
@@ -129,7 +131,7 @@ class AlmondNet(nn.Module):
     """
     A model that adapts the AlexNet CNN
     """
-
+    
     def __init__(self, pretrained=True, freeze_weights=True):
         super(AlmondNet, self).__init__()
         # Load the pretrained AlexNet model, 
@@ -195,6 +197,7 @@ class Trainer:
             criterion: Loss function for the model.
             optimizer: Optimization algorithm to be used.
             num_epochs: The number of iterations of the optimizer (default=25).
+
         Return: (losses, accuracies) over all the epochs.
         """
         self.model.train()
@@ -356,6 +359,7 @@ def f1_score(tp, fp, fn, tn):
     recall = tp / (tp + fn + 1e-10)
     return 2 * precision * recall / (precision + recall + 1e-10)
 
+evaluation.evaluate = evaluate
 evaluation.f1_score = f1_score
 
 
@@ -385,7 +389,6 @@ class ToNormalized(object):
             raise TypeError(f'Transform {self.__class__.__name__} expects a PyTorch tensor.')
         normalized_image = torch.div(torch.sub(pic, self.mean), self.std)
         return normalized_image
-
 
 class ToClosed(object):
     """Perform morphological closing on an RGB image with a 2,2 kernel."""
