@@ -2,6 +2,7 @@
 cs184a_project_proposal.pdf
 # Downloaded dataset
 /data
+/models
 # Editor files
 .vscode
 # Byte-compiled / optimized / DLL files
