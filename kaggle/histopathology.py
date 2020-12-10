@@ -3,7 +3,6 @@
 ####################################################
 import os
 import time
-from typing import Tuple, List
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,7 +14,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 import torchvision
 from torchvision import transforms
-from torchvision.models import vgg16
+from torchvision.models import vgg16, alexnet, resnet34
 
 
 class Album:
@@ -70,7 +69,19 @@ class PCam(Dataset):
             image = self.transform(image)
         return (image, label)
 
+class TestDataset(Dataset):
+
+    def __init__(self, image_dir, transforms=None):
+        pass
+
+    def __len__(self):
+        pass
+
+    def __getitem__(self, idx):
+        pass
+
 dataset.PCam = PCam
+dataset.TestDataset = TestDataset
 
 
 ##############################################################
@@ -118,6 +129,9 @@ class Veggie16(nn.Module):
             nn.Dropout(p=0.5, inplace=False),
             nn.Linear(in_features=4096, out_features=2, bias=True)
         )
+        # Define a LogSoftmax layer for converting outputs to probabilities
+        # Not needed in `forward()` because included in nn.CrossEntropyLoss
+        self.log_softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         """Does a forward pass on an image x."""
@@ -153,6 +167,9 @@ class AlmondNet(nn.Module):
             nn.Dropout(p=0.5, inplace=False),
             nn.Linear(in_features=2048, out_features=2, bias=True)
         )
+        # Define a LogSoftmax layer for converting outputs to probabilities
+        # Not needed in `forward()` because included in nn.CrossEntropyLoss
+        self.log_softmax = nn.LogSoftmax(dim=1)
     
     def forward(self, x):
         """Does a forward pass on an image x."""
@@ -162,9 +179,69 @@ class AlmondNet(nn.Module):
         out = self.classifier(out)
         return out
 
+class RaisinNet34(nn.Module):
+    """A model that adapts the ResNet-34 architecture.
+
+    This network applies transfer learning to learn the parameters
+    of ResNet-34, and freezes those layers of the model. The classification
+    layer of the architecture is modified and will be retrained to 
+    predict the desired number of output classes.
+    """
+
+    def __init__(self, pretrained=True, freeze_weights=True):
+        """Creates a RaisinNet34 network.
+
+        Args:
+            pretrained: Model should load the weights from a pretrained ResNet-34.
+            freeze_weights: Model should freeze weights of the convolutional layers.
+        """
+        super(RaisinNet34, self).__init__()
+        # Define the model's name for it's output files
+        # Load a pre-trained ResNet-34 model and turn off autograd
+        # so its weights won't change.
+        architecture = resnet34(pretrained=pretrained)
+        if freeze_weights:
+            for layer in architecture.parameters():
+                layer.requires_grad = False
+        # Copy the convolutional layers of the model.
+        self.conv1 = architecture.conv1
+        self.bn1 = architecture.bn1
+        self.relu = architecture.relu
+        self.maxpool = architecture.maxpool
+        self.layer1 = architecture.layer1
+        self.layer2 = architecture.layer2
+        self.layer3 = architecture.layer3
+        self.layer4 = architecture.layer4
+        # Copy the average pooling layer of the model.
+        self.avgpool = architecture.avgpool
+        # Redefine the classification block of ResNet-34.
+        # Use LeakyReLU units instead of ReLU units.
+        # Output layer has 2 nodes only for the 2 classes in the PCam dataset.
+        in_ftrs = architecture.fc.in_features
+        self.fc = nn.Linear(in_features=in_ftrs, out_features=2, bias=True)
+        # Define a LogSoftmax layer for converting outputs to probabilities
+        # Not needed in `forward()` because included in nn.CrossEntropyLoss
+        self.log_softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, x):
+        """Does a forward pass on an image x."""
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.maxpool(out)
+        out = self.avgpool(out)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.avgpool(out)
+        out = torch.flatten(out, 1)
+        out = self.fc(out)
+        return out
+
 models.Veggie16 = Veggie16
 models.AlmondNet = AlmondNet
-
+models.RaisinNet34 = RaisinNet34
 
 ####################################################
 # This module contains code used to train a model. #
@@ -211,16 +288,18 @@ class Trainer:
             for i, (images, labels) in enumerate(train_loader, start=1):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                # Generate prediction and evaluate
+                labels = labels.long().flatten()
+                # Forward propagate and evaluate
                 outputs = self.model(images)
-                loss = criterion(outputs, labels.long().flatten())
+                loss = criterion(outputs, labels)
                 # Backpropagate loss and update weights
                 optimizer.zero_grad()
                 loss.backward()
-                # Compute accuracy on this batch
-                predictions = torch.argmax(outputs, dim=1)
-                accuracy = (predictions == labels).sum().item() / len(labels)
                 optimizer.step()
+                # Compute class probabilities -> predictions -> accuracy
+                probabilities = self.model.log_softmax(outputs)
+                predictions = torch.argmax(probabilities, dim=1)
+                accuracy = (predictions == labels).sum().item() / len(labels)
                 # Compute running average of epoch loss
                 epoch_loss = (epoch_loss * (i-1) + loss.item()) / i
                 # Compute running average of accuracy
@@ -228,9 +307,9 @@ class Trainer:
                 # Print progress every 1000 batches
                 if i % 1000 == 0:
                     print(f'Epoch [{epoch}/{num_epochs}], Step [{i}/{num_steps}], '
-                          f'Loss: {loss.item():.6f}; Accuracy: {accuracy:.6f}%')
+                          f'Loss: {loss.item():.6f}; Accuracy: {100*accuracy:.2f}%')
             # Print metrics for the current epoch
-            print(f'------------[Loss = {epoch_loss:6f}; Accuracy = {epoch_accuracy:6f}%]------------')
+            print(f'------------[Loss = {epoch_loss:.6f}; Accuracy = {100*epoch_accuracy:.4f}%]------------')
             # Update trackers
             losses.append(epoch_loss)
             accuracies.append(epoch_accuracy)
@@ -261,19 +340,19 @@ class Trainer:
             for i, (images, labels) in enumerate(val_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-
                 labels = labels.long().flatten()
+                # Forward propagate and evaluate
                 outputs = self.model(images)
                 loss = criterion(outputs, labels)
-                predictions = torch.argmax(outputs, dim=1)
-
+                # Compute class probabilities -> predictions
+                probabilities = self.model.log_softmax(outputs)
+                predictions = torch.argmax(probabilities, dim=1)
                 # Compute confusion matrix terms
                 tp += (predictions[labels == 1] == 1).sum().item()
                 fp += (predictions[labels == 0] == 1).sum().item()
                 fn += (predictions[labels == 1] == 0).sum().item()
                 tn += (predictions[labels == 0] == 0).sum().item()
-
-                # Compute running average of loss
+                # Compute total loss
                 total_loss += loss.item()
         # Compute model accuracy and f1-score
         accuracy = (tp + tn) / (tp + fp + fn + tn + 1e-10)
@@ -328,7 +407,7 @@ training.Trainer = Trainer
 #######################################################
 # This module contains code used to evaluate a model. # 
 #######################################################
-def plot_lr_and_accuracy(losses, accuracies):
+def plot_loss_and_accuracy(losses, accuracies):
     plt.subplots_adjust(wspace=1)
     fig, ax = plt.subplots(1,2, figsize=(10,5))
     ax[0].set_title('Training Loss')
@@ -344,7 +423,7 @@ def plot_lr_and_accuracy(losses, accuracies):
     plt.savefig('/kaggle/working/rates.png')
     return fig, ax
 
-def f1_score(tp, fp, fn, tn):
+def f1_score(tp: int, fp: int, fn: int, tn: int):
     """Computes the f1_score for a given pair of predictions and ground truths.
     
     Args:
@@ -359,7 +438,7 @@ def f1_score(tp, fp, fn, tn):
     recall = tp / (tp + fn + 1e-10)
     return 2 * precision * recall / (precision + recall + 1e-10)
 
-evaluation.evaluate = evaluate
+evaluation.plot_loss_and_accuracy = plot_loss_and_accuracy
 evaluation.f1_score = f1_score
 
 
@@ -369,7 +448,7 @@ evaluation.f1_score = f1_score
 class ToNormalized(object):
     """Perform channel-wise normalization on an RGB image."""
     
-    def __init__(self, mean: np.typing.ArrayLike, std: np.typing.ArrayLike):
+    def __init__(self, mean, std):
         """Create a normalizing transform.
         
         Args:
