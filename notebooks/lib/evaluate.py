@@ -28,13 +28,13 @@ def evaluate(model, val_loader, device, criterion):
             labels = labels.to(device)
 
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels.long().flatten())
             predictions = torch.argmax(outputs, dim=1)
 
             y.extend(labels)
             y_hat.extend(predictions)
 
-			# Compute running average of loss
+            # Compute running average of loss
             net_loss = (net_loss * (i-1) + loss.item()) / i
             # Compute totals
             total += labels.size(0)

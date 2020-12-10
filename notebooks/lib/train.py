@@ -4,6 +4,7 @@ import time
 
 import torch
 
+
 def train(model, train_loader, device, criterion, optimizer, num_epochs=25):
 	"""Trains a given model.
 	
@@ -36,9 +37,10 @@ def train(model, train_loader, device, criterion, optimizer, num_epochs=25):
 			# Print progress every 1000 batches
 			if i % 1000 == 0:
 				print(f'Epoch [{epoch}/{num_epochs}], Step [{i}/{num_steps}], Loss: {loss.item():.6f}')
-		torch.save(model.state_dict('../models/checkpoint_model0.pth.tar'))
-    # Print training time
+				torch.save(model.state_dict(), model.__class__.__name__ + '_ckpt.pth')
+
+	# Print training time
 	time_elapsed = time.time() - since
 	print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
 	return total_loss
-	
+
