@@ -6,10 +6,10 @@ import time
 from typing import Tuple, List
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import PIL
-from sklearn.metrics import confusion_matrix
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -127,7 +127,43 @@ class Veggie16(nn.Module):
         out = self.classifier(out)
         return out
 
+class AlmondNet(nn.Module):
+    """
+    A model that adapts the AlexNet CNN
+    """
+    
+    def __init__(self, pretrained=True, freeze_weights=True):
+        super(AlmondNet, self).__init__()
+        # Load the pretrained AlexNet model, 
+        # remove autograd to keep weights from changind
+        architecture = alexnet(pretrained=pretrained)
+        if freeze_weights:
+            for layer in architecture.parameters():
+                layer.requires_grad = False
+        # copy architecture features and avg pool layer
+        self.features = architecture.features
+        self.avgpool = architecture.avgpool
+        in_ftrs = architecture.classifier[1].in_features
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features=in_ftrs, out_features=2048, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=0.5, inplace=False),
+            nn.Linear(in_features=2048, out_features=2048, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=0.5, inplace=False),
+            nn.Linear(in_features=2048, out_features=2, bias=True)
+        )
+    
+    def forward(self, x):
+        """Does a forward pass on an image x."""
+        out = self.features(x)
+        out = self.avgpool(out)
+        out = torch.flatten(out, 1)
+        out = self.classifier(out)
+        return out
+
 models.Veggie16 = Veggie16
+models.AlmondNet = AlmondNet
 
 
 ####################################################
@@ -149,8 +185,9 @@ class Trainer:
         # The directory where the model will be save should exist.
         if not os.path.exists(model_dir) or not os.path.isdir(model_dir):
             raise ValueError(f'Proposed model directory {model_dir} does not exist or is not a folder.')
-        self.checkpoint_file = os.path.join(model_dir, model.__class__.__name__ + '_ckpt.pth')
-        self.final_file = os.path.join(model_dir, model.__class__.__name__ + '_final.pth')
+        self.model_dir = model_dir
+        self.checkpoint_file = os.path.join(self.model_dir, model.__class__.__name__ + '_ckpt.pth')
+        self.final_file = os.path.join(self.model_dir, model.__class__.__name__ + '_final.pth')
 
     def train(self, train_loader, criterion, optimizer, num_epochs=25):
         """Trains the model on a training set.
@@ -204,7 +241,7 @@ class Trainer:
         print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
         return losses, accuracies
 
-    def evaluate(self, val_loader, criterion):
+    def evaluate(self, val_loader: torch.utils.data.DataLoader, criterion):
         """Evaluates the model on a validation set.
 
         Args:
@@ -243,23 +280,47 @@ class Trainer:
         score = f1_score(tp, fp, fn, tn)
         return score, accuracy, total_loss
     
+    def load_from_file(self, path: str, msg_file_name: str = 'File'):
+        """Loads model weights from a file.
+        
+        Args:
+            path: Path to the model weights file.
+            msg_file_name: Optional reference for log message.
+        """
+        if os.path.exists(path) and os.path.isfile(path):
+            self.model.load_state_dict(torch.load(path))
+            print(f'Successfully Loaded {msg_file_name}: {path}')
+        else:
+            print(f'No File Found at: {path}')
+
+    def save_to_file(self, path: str, msg_file_name: str = 'Weights'):
+        """Saves model weights to a file.
+        
+        Args:
+            path: Path to the model weights file.
+            msg_file_name: Optional reference for log message.
+        """
+        if os.path.exists(os.path.dirname(path)):
+            torch.save(self.model.state_dict(), path)
+            print(f'Successfully saved {msg_file_name} to: {path}')
+        else:
+            print(f'Attempted to save {msg_file_name} invalid directory: {path}')
+
     def save_checkpoint(self):
         """Saves current weights to checkpoint file."""
-        torch.save(self.model.state_dict(), self.checkpoint_file)    
+        self.save_to_file(self.checkpoint_file, 'checkpoint file')
 
     def load_checkpoint(self):
         """Loads the weights from last checkpoint."""
-        if os.path.exists(self.checkpoint_file):
-            self.model.load_state_dict(torch.load(self.checkpoint_file))
+        self.load_from_file(self.checkpoint_file, 'checkpoint file')
     
     def save_final_model(self):
         """Saves the current weights to the final weights file."""
-        torch.save(self.model.state_dict(), self.final_file)
+        self.save_to_file(self.final_file, 'final weights')
         
     def load_final_model(self):
         """Loads model weights from the final weights file."""
-        if os.path.exists(self.final_file):
-            self.model.load_state_dict(torch.load(self.final_file))
+        self.load_from_file(self.final_file, 'final weights')
 
 training.Trainer = Trainer
 
