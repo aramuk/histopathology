@@ -210,7 +210,8 @@ class Trainer:
                 labels = labels.to(self.device)
                 # Generate prediction and evaluate
                 outputs = self.model(images)
-                loss = criterion(outputs, labels.long().flatten())
+                labels = labels.long().flatten()
+                loss = criterion(outputs, labels)
                 # Backpropagate loss and update weights
                 optimizer.zero_grad()
                 loss.backward()
@@ -365,7 +366,7 @@ evaluation.f1_score = f1_score
 class ToNormalized(object):
     """Perform channel-wise normalization on an RGB image."""
     
-    def __init__(self, mean: np.typing.ArrayLike, std: np.typing.ArrayLike):
+    def __init__(self, mean, std):
         """Create a normalizing transform.
         
         Args:
