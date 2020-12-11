@@ -12,8 +12,6 @@ import PIL
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
-import torchvision
-from torchvision import transforms
 from torchvision.models import vgg16, alexnet, resnet34
 
 
@@ -41,7 +39,8 @@ class PCam(Dataset):
     """
 
     def __init__(self, image_dir, csv_path, transform=None):
-        """ 
+        """Create a PyTorch dataset of (image, label) pairs from PCam.
+
         Args:
             image_dir: Folder with image data in file system.
             csv_path: CSV file with image labels.
@@ -53,11 +52,11 @@ class PCam(Dataset):
         self.num_samples = len(self.labels_df.index)
 
     def __len__(self):
-        """Get the size of the PCam dataset."""
+        """Returns the length of the PCam dataset."""
         return self.num_samples
 
     def __getitem__(self, idx):
-        """Get the (image, label) at a given index in the PCam dataset."""
+        """Get the (image, label) pair at a given index in the PCam dataset."""
         if torch.is_tensor(idx):
             idx = idx.to_list()
         image_id = self.labels_df.iloc[idx, 0]
@@ -69,16 +68,42 @@ class PCam(Dataset):
             image = self.transform(image)
         return (image, label)
 
-class TestDataset(Dataset):
+class UnlabeledPCam(Dataset):
+    """The Patch Camelyon (PCam) dataset, without ground truth labels [1].
+    
+    Retrieved from https://www.kaggle.com/c/histopathologic-cancer-detection/.
+
+    [1] B. S. Veeling, J. Linmans, J. Winkens, T. Cohen, M. Welling. "Rotation 
+        Equivariant CNNs for Digital Pathology". arXiv:1806.03962
+    """
 
     def __init__(self, image_dir, transforms=None):
-        pass
+        """Create a PyTorch dataset of images from PCam.
+
+        Args:
+            image_dir: Folder with image data in file system.
+            transform: Transforms to apply before loading.
+        """
+        if not os.path.exists(image_dir) or not os.path.isdir(image_dir):
+            raise ValueError(f'Proposed image directory {image_dir} is not on this file system.')
+        self.image_dir = image_dir
+        self.transform = transform
+        self.image_paths = os.listdir(self.image_dir)
+        self.num_samples = len(self.image_paths)
 
     def __len__(self):
-        pass
+        """Returns the length of the unlabeled PCam dataset."""
+        return self.num_samples
 
     def __getitem__(self, idx):
-        pass
+        """Get the image at a given index in the PCam dataset."""
+        if torch.is_tensor(idx):
+            idx = idx.to_list()
+        image_path = self.image_paths.iloc[idx, 0]
+        image = PIL.Image.open(image_path).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+        return image
 
 dataset.PCam = PCam
 dataset.TestDataset = TestDataset
@@ -411,16 +436,15 @@ def plot_loss_and_accuracy(losses, accuracies):
     plt.subplots_adjust(wspace=1)
     fig, ax = plt.subplots(1,2, figsize=(10,5))
     ax[0].set_title('Training Loss')
-    ax[0].plot(list(range(1,26)), losses, 'r-')
+    ax[0].plot(list(range(1,len(losses)+1)), losses, 'r-')
     ax[0].set_ylabel('Categorical Cross Entropy Loss')
-    ax[0].set_ylim(0, max(losses))
+    ax[0].set_ylim(0, max(losses)*1.1)
     ax[0].set_xlabel('Epochs')
     ax[1].set_title('Training Accuracy')
-    ax[1].plot(list(range(1,26)), accuracies, 'b-')
+    ax[1].plot(list(range(1,len(accuracies)+1)), accuracies, 'b-')
     ax[1].set_ylabel('Accuracy (%)')
-    ax[1].set_ylim(min(accuracies), max(accuracies))
+    ax[1].set_ylim(min(accuracies)*0.9, max(accuracies)*1.1)
     ax[1].set_xlabel('Epochs')
-    plt.savefig('/kaggle/working/rates.png')
     return fig, ax
 
 def f1_score(tp: int, fp: int, fn: int, tn: int):
