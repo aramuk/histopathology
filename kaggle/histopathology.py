@@ -1,6 +1,7 @@
 ####################################################
 # Helper code for Histopathologic Cancer Detection #
 ####################################################
+import csv
 import os
 import time
 
@@ -77,7 +78,7 @@ class UnlabeledPCam(Dataset):
         Equivariant CNNs for Digital Pathology". arXiv:1806.03962
     """
 
-    def __init__(self, image_dir, transforms=None):
+    def __init__(self, image_dir, transform=None):
         """Create a PyTorch dataset of images from PCam.
 
         Args:
@@ -99,14 +100,14 @@ class UnlabeledPCam(Dataset):
         """Get the image at a given index in the PCam dataset."""
         if torch.is_tensor(idx):
             idx = idx.to_list()
-        image_path = self.image_paths.iloc[idx, 0]
+        image_path = os.path.join(self.image_dir, self.image_paths[idx])
         image = PIL.Image.open(image_path).convert('RGB')
         if self.transform:
             image = self.transform(image)
         return image
 
 dataset.PCam = PCam
-dataset.TestDataset = TestDataset
+dataset.UnlabeledPcam = UnlabeledPCam
 
 
 ##############################################################
@@ -462,8 +463,42 @@ def f1_score(tp: int, fp: int, fn: int, tn: int):
     recall = tp / (tp + fn + 1e-10)
     return 2 * precision * recall / (precision + recall + 1e-10)
 
+def predict_to_csv(model, unlabeled_loader, device, col_names, csv_path, batch_size=50):
+    """Saves model predictions to a CSV file.
+    
+    Args:
+        model: A PyTorch model.
+        unlabeled_loader: A PyTorch DataLoader that returns only images.
+        device: Device for running model.
+        col_names: Column names for the output csv.
+        csv_path: Output path of csv.
+    """
+    if not os.path.exists(os.path.dirname(csv_path)):
+        raise ValueError(f'Attempted to save predictions invalid directory: {csv_path}')
+    model.eval()
+    with torch.no_grad():
+        with open(csv_path, 'w') as csvfile:
+            predictions_writer = csv.writer(csvfile)
+            predictions_writer.writerow(['id','label'])
+
+            num_steps = len(unlabeled_loader)
+            for i, images in enumerate(unlabeled_loader):
+                images = images.to(device)
+                outputs = model(images)
+                probabilities = model.log_softmax(outputs)
+                predictions = torch.argmax(probabilities, dim=1)
+
+                for j, prob in enumerate(predictions):
+                    idx = i*batch_size + j
+                    predictions_writer.writerow([os.path.splitext(col_names[idx])[0], 
+                                                 prob.item()])
+                if i % 100 == 0:
+                    print(f'Predictions written for batch [{i}/{num_steps}]')
+    print(f'Saved model predictions to: {csv_path}')
+
 evaluation.plot_loss_and_accuracy = plot_loss_and_accuracy
 evaluation.f1_score = f1_score
+evaluation.predict_to_csv = predict_to_csv
 
 
 #################################################
