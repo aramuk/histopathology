@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import PIL
+from sklearn.metrics import roc_curve
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -496,9 +497,73 @@ def predict_to_csv(model, unlabeled_loader, device, col_names, csv_path, batch_s
                     print(f'Predictions written for batch [{i}/{num_steps}]')
     print(f'Saved model predictions to: {csv_path}')
 
+def roc(model, data_loader, device, subsample=1.0):
+    """Estimate the ROC curve and its integral for the model on a dataset.
+    
+    Args:
+        model: A PyTorch model.
+        data_loader: A PyTorch DataLoader (shuffled).
+        device: Device for running model.
+        subsample: The number of samples to use when estimating the ROC curve.
+
+    Return:
+        auc: Area under the ROC curve.
+        fpr: False positive rate of model at various thresholds.
+        tpr: True positive rate of model at same thresholds as FPR.
+        thresholds: Thresholds at which the model was decided
+    """
+    y_true = []
+    y_hat = []
+    with torch.no_grad():
+        num_batches = len(data_loader)
+        sample_size = int(subsample * num_batches)
+        
+        for i, (images, labels) in enumerate(data_loader, start=1):
+            if i > sample_size:
+                break
+            images = images.to(device)
+            labels = labels.long().flatten().to(device)
+            # Forward pass and get predicted label
+            outputs = model(images)
+            probabilities = model.log_softmax(outputs)
+            # Update
+            y_hat.extend(probabilities[:,1].tolist())
+            y_true.extend(labels.tolist())
+            if i % 100 == 0:
+                print(f'Computed predictions for sample [{i}/{sample_size}]')
+    fpr, tpr, thresholds = roc_curve(y_true, y_hat)
+    auc = np.trapz(tpr, fpr)
+    return auc, fpr, tpr, thresholds
+
+def plot_roc(fpr, tpr, auc, model_name):
+    """Plot ROC curve for a model.
+    
+    Args:
+        fpr: False positive rate at various thresholds.
+        tpr: True positive rate at same thresholds as fpr.
+        auc: Computer area under the ROC curve.
+        model_name: The name of the model.
+    """
+    plt.figure()
+    # ROC Curve
+    plt.plot(fpr, tpr, 'b-', lw=2, label=f'ROC curve (Area = {auc:.4f})')
+    # No discrimination line
+    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.plot(fpr, tpr)
+    # Scale axes
+    plt.xlim([-0.05, 1.0])
+    plt.ylim([0.0, 1.05])
+    # Labels
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend(loc="lower right")
+    plt.title(f'Received Operating Characteristic Curve for {model_name}')
+
 evaluation.plot_loss_and_accuracy = plot_loss_and_accuracy
 evaluation.f1_score = f1_score
 evaluation.predict_to_csv = predict_to_csv
+evaluation.roc = roc
+evaluation.plot_roc = plot_roc
 
 
 #################################################
