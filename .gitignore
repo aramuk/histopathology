@@ -1,15 +1,14 @@
-# Project proposal document
+# Project Documents
 cs184a_project_proposal.pdf
-# Downloaded dataset
+cs184a_project_presentation.mp4
+# Downloaded Datasets and Models
 /data
 /models
 # Editor files
 .vscode
+notebooks/.ipynb_checkpoints
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 # Library and key files
 kaggle.json
-lib.zip
-notebooks/.ipynb_checkpoints/
-models/
