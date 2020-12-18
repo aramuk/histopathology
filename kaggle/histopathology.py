@@ -276,7 +276,7 @@ models.RaisinNet34 = RaisinNet34
 class Trainer:
     """A wrapper that trains a model """
 
-    def __init__(self, model, device, model_dir='/kaggle/working/'):
+    def __init__(self, model, device, train_loader, val_loader, model_dir='/kaggle/working/'):
         """Initialize a Trainer.
 
         Args:
@@ -286,14 +286,69 @@ class Trainer:
         """
         self.model = model
         self.device = device
+        self.train_loader = train_loader
+        self.val_loader = val_loader
         # The directory where the model will be save should exist.
         if not os.path.exists(model_dir) or not os.path.isdir(model_dir):
             raise ValueError(f'Proposed model directory {model_dir} does not exist or is not a folder.')
         self.model_dir = model_dir
         self.checkpoint_file = os.path.join(self.model_dir, model.__class__.__name__ + '_ckpt.pth')
         self.final_file = os.path.join(self.model_dir, model.__class__.__name__ + '_final.pth')
+        self.epoch = 1
+        self.total_epochs = 0
 
-    def train(self, train_loader, criterion, optimizer, num_epochs=25):
+    def reset_epochs():
+        self.epoch = 1
+        self.total_epochs = 0
+
+    def _train_one_epoch(self, criterion, optimizer, scheduler=None, output_freq=1000):
+        """Trains the model for one epoch on the training set.
+
+        Args:
+            criterion: Loss function for the model.
+            optimizer: Optimization algorithm to be used.
+            output_freq: Print training metrics every `output_freq` steps.
+
+        Returns: (epoch_loss, epoch_accuracy)
+        """
+        self.model.train()
+        num_steps = len(self.train_loader)
+        epoch_accuracy = 0.0
+        epoch_loss = 0.0
+        for i, (images, labels) in enumerate(self.train_loader, start=1):
+            images = images.to(self.device)
+            labels = labels.to(self.device).long().flatten()
+            # Clear previous gradients
+            optimizer.zero_grad()
+            # Forward propagate and evaluate
+            outputs = self.model(images)
+            loss = criterion(outputs, labels)
+            # Backpropagate loss and update weights
+            loss.backward()
+            optimizer.step()
+            # Compute class probabilities -> predictions -> accuracy
+            probabilities = self.model.log_softmax(outputs)
+            predictions = torch.argmax(probabilities, dim=1)
+            accuracy = (predictions == labels).sum().item() / len(labels)
+            # Compute total epoch loss
+            epoch_loss += loss.item()
+            # Compute running average of accuracy
+            epoch_accuracy = (epoch_accuracy * (i-1) + accuracy) / i
+            # Update scheduler if provided:
+            if scheduler:
+                scheduler.step()
+            # Print progress every 1000 batches
+            if i % output_freq == 0:
+                print(f'Epoch [{self.epoch}/{self.total_epochs}], Step [{i}/{num_steps}], '
+                      f'Loss: {loss.item():.6f}; Accuracy: {100*accuracy:.2f}%')
+        # Print metrics for the current epoch
+        print(f'------------[Loss = {epoch_loss:.6f}; Accuracy = {100*epoch_accuracy:.4f}%]------------')
+        # Increment epoch
+        self.epoch += 1
+        # Return trackers
+        return epoch_loss, epoch_accuracy
+
+    def train(self, criterion, optimizer, scheduler=None, num_epochs=25, output_freq=1000):
         """Trains the model on a training set.
 
         Args:
@@ -302,52 +357,38 @@ class Trainer:
             optimizer: Optimization algorithm to be used.
             num_epochs: The number of iterations of the optimizer (default=25).
 
-        Return: (losses, accuracies) over all the epochs.
+        Return: (train_losses, val_losses, train_accuracies, val_accuracies) over all the epochs.
         """
+        train_losses = []
+        val_losses = []
+        train_accuracies = []
+        val_accuracies = []
         self.model.train()
+        self.total_epochs += num_epochs
         since = time.time()
-        num_steps = len(train_loader)
-        losses = []
-        accuracies = []
-        for epoch in range(1, num_epochs+1):
-            epoch_accuracy = 0.0
-            epoch_loss = 0.0
-            for i, (images, labels) in enumerate(train_loader, start=1):
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                labels = labels.long().flatten()
-                # Forward propagate and evaluate
-                outputs = self.model(images)
-                loss = criterion(outputs, labels)
-                # Backpropagate loss and update weights
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                # Compute class probabilities -> predictions -> accuracy
-                probabilities = self.model.log_softmax(outputs)
-                predictions = torch.argmax(probabilities, dim=1)
-                accuracy = (predictions == labels).sum().item() / len(labels)
-                # Compute running average of epoch loss
-                epoch_loss = (epoch_loss * (i-1) + loss.item()) / i
-                # Compute running average of accuracy
-                epoch_accuracy = (epoch_accuracy * (i-1) + accuracy) / i
-                # Print progress every 1000 batches
-                if i % 1000 == 0:
-                    print(f'Epoch [{epoch}/{num_epochs}], Step [{i}/{num_steps}], '
-                          f'Loss: {loss.item():.6f}; Accuracy: {100*accuracy:.2f}%')
-            # Print metrics for the current epoch
-            print(f'------------[Loss = {epoch_loss:.6f}; Accuracy = {100*epoch_accuracy:.4f}%]------------')
+        for epoch in range(self.epoch, self.total_epochs+1):
+            # Train one epoch
+            epoch_loss, epoch_accuracy = self._train_one_epoch(criterion, optimizer, 
+                                                               scheduler=scheduler, 
+                                                               output_freq=output_freq)
+            # Evaluate model
+            _, val_accuracy, val_loss = self.evaluate(criterion)
             # Update trackers
-            losses.append(epoch_loss)
-            accuracies.append(epoch_accuracy)
+            train_losses.append(epoch_loss)
+            train_accuracies.append(epoch_accuracy)
+            val_losses.append(val_loss)
+            val_accuracies.append(val_accuracy)
             # Save current weights of model in case kernel crashes.
             self.save_checkpoint()
+            # Update learning rate scheduler
+            if scheduler:
+                scheduler.step()
         # Print training time
         time_elapsed = time.time() - since
         print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
-        return losses, accuracies
+        return train_losses, val_losses, train_accuracies, val_accuracies
 
-    def evaluate(self, val_loader: torch.utils.data.DataLoader, criterion):
+    def evaluate(self, criterion):
         """Evaluates the model on a validation set.
 
         Args:
@@ -360,14 +401,12 @@ class Trainer:
         """
         total_loss = 0.0
         tp, fp, fn, tn = 0, 0, 0, 0
-        
         self.model.eval()
         with torch.no_grad():
             since = time.time()
-            for i, (images, labels) in enumerate(val_loader):
+            for i, (images, labels) in enumerate(self.val_loader):
                 images = images.to(self.device)
-                labels = labels.to(self.device)
-                labels = labels.long().flatten()
+                labels = labels.to(self.device).long().flatten()
                 # Forward propagate and evaluate
                 outputs = self.model(images)
                 loss = criterion(outputs, labels)
