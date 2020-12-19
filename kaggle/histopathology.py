@@ -297,7 +297,7 @@ class Trainer:
         self.epoch = 1
         self.total_epochs = 0
 
-    def reset_epochs():
+    def reset_epochs(self):
         self.epoch = 1
         self.total_epochs = 0
 
@@ -397,7 +397,7 @@ class Trainer:
             device: The CUDA device being used.
             criterion: Loss function for the model.
 
-        Returns: A tuple of the (F1-Score, Accuracy, Total Loss) for the model.
+        Returns: A tuple of the (F1-Score, Accuracy, Total Loss) on the validation set.
         """
         total_loss = 0.0
         tp, fp, fn, tn = 0, 0, 0, 0
